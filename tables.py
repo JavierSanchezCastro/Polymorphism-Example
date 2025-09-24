@@ -42,7 +42,20 @@ class ExactQuestion(Question):
     id: Mapped[int] = mapped_column(Integer, ForeignKey('questions.id'), primary_key=True)
     question_text: Mapped[str] = mapped_column(String)
     exact_answer: Mapped[str] = mapped_column(String)  # Exact answer, could be a word or number
-    
+
+class SingleChoiceQuestion(Question):
+    __tablename__ = 'single_choice_questions'
+    __mapper_args__ = {"polymorphic_identity": "single_choice"}
+    id: Mapped[int] = mapped_column(Integer, ForeignKey('questions.id'), primary_key=True)
+    question_text: Mapped[str] = mapped_column(String)
+    # Only choice-based questions expose options
+    options: Mapped[list["ChoiceOption"]] = relationship(
+        "ChoiceOption",
+        cascade="all, delete-orphan",
+        single_parent=True,
+        foreign_keys="ChoiceOption.question_id",
+        overlaps="question,options",
+    )
 
 # Multiple choice question type
 class MultipleChoiceQuestion(Question):
@@ -52,18 +65,25 @@ class MultipleChoiceQuestion(Question):
     question_text: Mapped[str] = mapped_column(String)
     
     # Options for the multiple-choice question
-    options: Mapped[list["MultipleChoiceOption"]] = relationship("MultipleChoiceOption", back_populates="question")
+    options: Mapped[list["ChoiceOption"]] = relationship(
+        "ChoiceOption",
+        cascade="all, delete-orphan",
+        single_parent=True,
+        foreign_keys="ChoiceOption.question_id",
+        overlaps="question,options",
+    )
 
 
 # Option table for multiple-choice questions
-class MultipleChoiceOption(Base):
-    __tablename__ = 'multiple_choice_options'
+class ChoiceOption(Base):
+    __tablename__ = 'choice_options'
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     text: Mapped[str] = mapped_column(String)  # Option text
-    is_correct: Mapped[bool] = mapped_column(Boolean)  # If the option is correct or not
-    question_id: Mapped[int] = mapped_column(Integer, ForeignKey('multiple_choice_questions.id'))  # Foreign key to the question
+    is_correct: Mapped[bool] = mapped_column(Boolean)  # Whether this option is correct or not
+    question_id: Mapped[int] = mapped_column(Integer, ForeignKey('questions.id'))  # Foreign key to the question
     
-    question: Mapped["MultipleChoiceQuestion"] = relationship("MultipleChoiceQuestion", back_populates="options")
+    # Many-to-one to the base Question; unidirectional to avoid adding .options to all subtypes
+    question: Mapped["Question"] = relationship("Question", overlaps="options")
 
 # True/False question type
 class TrueFalseQuestion(Question):
@@ -89,4 +109,5 @@ class FormQuestion(Base):
     __tablename__ = 'form_questions'
     form_id: Mapped[int] = mapped_column(Integer, ForeignKey('forms.id'), primary_key=True)
     question_id: Mapped[int] = mapped_column(Integer, ForeignKey('questions.id'), primary_key=True)
+    #order_by: Mapped[int] = mapped_column(Integer)  # Order of the questions in the form
     #order: Mapped[Optional[int]] = mapped_column(Integer)  # Order of the questions in the form
